@@ -5,12 +5,13 @@ from app.monitor.hours import aggregate
 from app.monitor.modes import mode_windows
 from app.monitor.oxygen import correct
 from app.monitor.reconcile import compare
+from app.monitor.review import payload as review_payload
 from app.monitor.revision import choose
 from app.monitor.source import intake
 from app.monitor.validity import minute_evidence
 from app.numbers import display
 
-STAGES = ('intake', 'oxygen', 'validity', 'hours', 'reports')
+STAGES = ('intake', 'oxygen', 'validity', 'hours', 'reports', 'review')
 
 
 class Inspection:
@@ -58,6 +59,11 @@ class Inspection:
     def reports(self):
         rows, isolated = compare(self.hours['rows'], self.ledgers['reports'][0], self.window)
         return {'rows': rows, 'isolated': isolated, 'deviations': sum(row['code'] == 'DEVIATION' for row in rows)}
+
+    @cached_property
+    def review(self):
+        return review_payload(self.hours['rows'], self.reports['rows'], self.window.stack,
+                              self.window.tolerance)
 
     def results(self):
         return {stage: getattr(self, stage) for stage in STAGES}

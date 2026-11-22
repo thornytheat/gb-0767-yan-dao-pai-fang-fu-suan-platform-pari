@@ -14,6 +14,7 @@
 | M5 报送差异对账 | 核对差值、单据和游离报送 | `GET /api/samples/dirty/reports` | `app/monitor/reconcile.py` `app/monitor/reports.py` | `tests/test_reports.py` |
 | M6 批次留档复跑 | 汇总归档、并发复跑和查看历史 | `POST /api/runs` | `app/archive/run.py` `app/archive/store.py` | `tests/test_runs.py` |
 | M7 监测证据签发 | 下载和校验原件、摘要和判据 | `GET /api/export/{id}` | `app/archive/certificate.py` | `tests/test_evidence.py` |
+| M8 超差复核跟进 | 从超差派复核、补证后改派、核清结案与查看轨迹 | `GET /monitor/review` `GET /api/review` | `app/monitor/review.py` `app/archive/review.py` | `tests/test_review.py` |
 
 ## 陷阱登记
 
@@ -30,12 +31,15 @@
 | TRAP-15 | mg、g、µg 混测 | 数量级错误 | 单位系数归一 | `app/monitor/oxygen.py` | `tests/test_oxygen.py::test_units` |
 | TRAP-19 | 启停工况重叠 | 重复免计或顺序覆盖 | 并集与停机优先 | `app/monitor/modes.py` | `tests/test_validity.py::test_overlap_priority` |
 | TRAP-23 | 末端分钟 | 多免计一分钟 | 半开区间 | `app/monitor/modes.py` | `tests/test_validity.py::test_half_open` |
+| TRAP-31 | 迟补工况使原超差小时跌破有效门槛 | 继续用旧报送值催报，或把无复算值当作差异已核清而销项 | 改派补分钟证据，旧报送值只作被取代证据 | `app/monitor/review.py` `app/archive/review.py` | `tests/test_review.py::test_late_mode_downgrades_chase_to_evidence_on_same_case` |
+| TRAP-32 | 重试同一次复算 | 重复写入复核轨迹 | 复用归档编号并按（事项, 归档编号）去重 | `app/archive/store.py` `app/archive/review.py` | `tests/test_review.py::test_retrying_same_recalculation_adds_no_review_record` |
 
 ## 对账规则
 
 - 污样分钟源 109 条记录 = 可读 107 + 重复表头 1 + 结构隔离 1。
 - 120 个应测分钟 = 91 有效 + 8 工况免计 + 21 缺证。参比氧复算与报送按小时核对。
 - 内容摘要与规则版本组成留档键，原件和计算结果同事务存储，重复提交复用原清单。
+- 复核事项以「烟道 + UTC 小时」为键，仅在出现超差或冲突报送时立案；同一小时后续补证重算只推进同一事项并保留旧报送值，核清后在归档事务内结案。重试同一次复算复用归档编号，事件按（事项, 归档编号）唯一，不新增复核记录。
 
 ## 已知边界
 

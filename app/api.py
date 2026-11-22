@@ -4,6 +4,7 @@ from app.archive.certificate import issue
 from app.archive.run import archive_run
 from app.errors import InputError
 from app.monitor.inspection import STAGES, Inspection
+from app.monitor.review import from_results
 from app.monitor.source import sample
 
 api = Blueprint('api', __name__, url_prefix='/api')
@@ -23,8 +24,11 @@ def preview(name, stage):
 @api.post('/runs')
 def create_run():
     packet, reused = archive_run(archive(), request.get_json(silent=True))
+    review = from_results(packet['results'], packet['manifest']['parameters']['stack'],
+                          packet['manifest']['parameters']['tolerance'])
     return jsonify(run_id=packet['manifest']['run_id'], reused=reused, manifest=packet['manifest'],
-                   totals=packet['results']['hours']['totals'], deviations=packet['results']['reports']['deviations'])
+                   totals=packet['results']['hours']['totals'], deviations=packet['results']['reports']['deviations'],
+                   review=review['counts'])
 
 
 @api.get('/runs')
@@ -36,7 +40,20 @@ def runs():
 def snapshot(run_id, stage):
     if stage not in STAGES:
         raise InputError('STAGE_UNKNOWN', '找不到监测工序', 404)
-    return jsonify(archive().require(run_id)['results'][stage])
+    packet = archive().require(run_id)
+    if stage not in packet['results']:
+        parameters = packet['manifest']['parameters']
+        return jsonify(from_results(packet['results'], parameters['stack'], parameters.get('tolerance')))
+    return jsonify(packet['results'][stage])
+
+
+@api.get('/review')
+def review_cases():
+    stack = request.args.get('stack')
+    cases = archive().review(stack)
+    return jsonify(cases=cases, counts={
+        'open': sum(case['status'] == 'OPEN' for case in cases),
+        'closed': sum(case['status'] == 'CLOSED' for case in cases)})
 
 
 @api.get('/export/<run_id>')
